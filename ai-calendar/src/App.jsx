@@ -258,7 +258,9 @@ function App() {
     if (option === 'all') {
       if (isSignedIn && eventToDelete?.isGoogleEvent) {
         try {
-          await googleCalendarService.deleteEvent(eventId);
+          // If it's a recurring instance, delete the master event
+          const idToDelete = eventToDelete.recurringEventId || eventId;
+          await googleCalendarService.deleteEvent(idToDelete);
         } catch (err) {
           console.error("Failed to delete recurring event from Google Calendar", err);
           alert("Google Calendar 삭제 실패");
@@ -266,18 +268,32 @@ function App() {
         }
       }
     } else if (option === 'this') {
-      // TODO: For Google Calendar, this would involve adding an EXDATE to the recurrence rule
-      // or deleting the specific instance. This is more complex and out of scope for this quick fix.
-      // For now, it will only update the local state.
       if (isSignedIn && eventToDelete?.isGoogleEvent) {
-        alert("Google Calendar의 반복 일정 중 특정 날짜 삭제는 현재 지원되지 않습니다. 로컬에만 반영됩니다.");
+        try {
+          // Deleting an instance in Google Calendar creates an exception (cancels the instance)
+          await googleCalendarService.deleteEvent(eventId);
+        } catch (err) {
+          console.error("Failed to delete event instance from Google Calendar", err);
+          alert("Google Calendar 삭제 실패");
+          return;
+        }
       }
     } else if (option === 'following') {
-      // TODO: For Google Calendar, this would involve updating the recurrence rule's UNTIL date.
-      // This is more complex and out of scope for this quick fix.
-      // For now, it will only update the local state.
       if (isSignedIn && eventToDelete?.isGoogleEvent) {
-        alert("Google Calendar의 반복 일정 중 이후 일정 삭제는 현재 지원되지 않습니다. 로컬에만 반영됩니다.");
+        try {
+          // Use the master event ID (recurringEventId) and the instance start time
+          const masterId = eventToDelete.recurringEventId;
+          if (masterId) {
+            await googleCalendarService.deleteFollowingEvents(masterId, eventToDelete.start);
+          } else {
+            // Fallback if no recurringEventId (shouldn't happen for instances)
+            console.warn("No recurringEventId found for following delete");
+          }
+        } catch (err) {
+          console.error("Failed to delete following events from Google Calendar", err);
+          alert("Google Calendar 삭제 실패");
+          return;
+        }
       }
     }
 

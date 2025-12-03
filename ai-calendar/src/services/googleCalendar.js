@@ -127,7 +127,9 @@ export const googleCalendarService = {
                     conferenceData: item.conferenceData,
                     colorId: item.colorId,
                     isGoogleEvent: true,
-                    htmlLink: item.htmlLink
+                    htmlLink: item.htmlLink,
+                    recurringEventId: item.recurringEventId,
+                    recurrence: item.recurringEventId ? 'recurring' : undefined
                 };
             });
         } catch (err) {
@@ -246,6 +248,60 @@ export const googleCalendarService = {
             return true;
         } catch (err) {
             console.error('Error deleting event', err);
+            throw err;
+        }
+    },
+
+    deleteFollowingEvents: async (recurringEventId, instanceStart) => {
+        try {
+            // 1. Get the master event
+            const masterEvent = await window.gapi.client.calendar.events.get({
+                'calendarId': 'primary',
+                'eventId': recurringEventId
+            });
+
+            const masterResource = masterEvent.result;
+            const recurrence = masterResource.recurrence;
+
+            if (!recurrence || recurrence.length === 0) return;
+
+            // 2. Calculate UNTIL (UTC)
+            // We want to stop the series BEFORE the current instance.
+            // So UNTIL should be (Instance Start Time - 1 second)
+            const untilDate = new Date(instanceStart);
+            untilDate.setSeconds(untilDate.getSeconds() - 1);
+
+            const toGoogleISO = (date) => {
+                return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            };
+
+            const untilStr = toGoogleISO(untilDate);
+
+            // 3. Update RRULE
+            const newRecurrence = recurrence.map(rule => {
+                if (rule.startsWith('RRULE:')) {
+                    let newRule = rule;
+                    // Remove existing UNTIL and COUNT
+                    newRule = newRule.replace(/;?UNTIL=[^;]+/, '');
+                    newRule = newRule.replace(/;?COUNT=[^;]+/, '');
+
+                    return `${newRule};UNTIL=${untilStr}`;
+                }
+                return rule;
+            });
+
+            // 4. Patch the master event
+            await window.gapi.client.calendar.events.patch({
+                'calendarId': 'primary',
+                'eventId': recurringEventId,
+                'resource': {
+                    'recurrence': newRecurrence
+                }
+            });
+
+            return true;
+        } catch (err) {
+            console.error('Error deleting following events', err);
             throw err;
         }
     }

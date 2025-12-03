@@ -100,7 +100,8 @@ const EventList = ({ date, events, onAddEvent, onDeleteEvent, onEditEvent }) => 
                                                         'weekend': '주말',
                                                         'weekly': '매주',
                                                         'biweekly': '격주',
-                                                        'monthly': '매월'
+                                                        'monthly': '매월',
+                                                        'recurring': '반복'
                                                     };
                                                     return map[event.recurrence] || event.recurrence;
                                                 })()}
