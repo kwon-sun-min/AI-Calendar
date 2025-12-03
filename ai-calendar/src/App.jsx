@@ -47,6 +47,13 @@ function App() {
     });
   }, []);
 
+  // Pending Deletions to prevent race conditions with polling
+  const pendingDeletions = React.useRef(new Set());
+  // Pending Updates to prevent race conditions (preserve local state)
+  const pendingUpdates = React.useRef(new Set());
+  // Track specific instance deletions: Set<"masterId_startTime">
+  const pendingInstanceDeletions = React.useRef(new Set());
+
   // Define fetch function with useCallback
   const fetchGoogleEvents = useCallback(async () => {
     if (!isSignedIn) return;
@@ -57,10 +64,55 @@ function App() {
       const gEvents = await googleCalendarService.listEvents(start, end);
 
       setEvents(prev => {
-        // Keep local events (those without isGoogleEvent or with isGoogleEvent=false)
-        // And replace/add Google events
+        // Keep local events
         const localEvents = prev.filter(e => !e.isGoogleEvent);
-        return [...localEvents, ...gEvents];
+
+        // 1. Filter out pending deletions
+        let validGoogleEvents = gEvents.filter(e => !pendingDeletions.current.has(e.id));
+        validGoogleEvents = validGoogleEvents.filter(e => {
+          if (e.recurringEventId && pendingDeletions.current.has(e.recurringEventId)) return false;
+          return true;
+        });
+
+        // 2. Handle pending updates (Preserve local state for recurring events)
+        // If a master ID is in pendingUpdates, we should IGNORE server events for that master ID
+        // and trust our local state (which has the optimistic update applied)
+        const pendingMasterIds = new Set();
+        pendingUpdates.current.forEach(id => pendingMasterIds.add(id));
+
+        // Filter out server events that belong to a pending master ID
+        validGoogleEvents = validGoogleEvents.filter(e => {
+          const masterId = e.recurringEventId || e.id;
+          // If the whole series is pending update, filter out all instances
+          if (pendingMasterIds.has(masterId)) {
+            // Exception: If we only deleted specific instances (option 'this'), 
+            // we might want to keep other instances. 
+            // But for simplicity and speed, if we are updating a series, we trust local state.
+            return false;
+          }
+
+          // Also check if this specific instance is pending deletion (for 'this' option)
+          // We use a composite key of masterId + start time because instance IDs might change or be tricky
+          const compositeKey = `${masterId}_${e.start.dateTime || e.start.date}`;
+          if (pendingInstanceDeletions.current.has(compositeKey)) return false;
+
+          // Fallback: check by ID if available
+          if (pendingUpdates.current.has(e.id)) return false;
+
+          return true;
+        });
+
+        // Keep local versions of events that are currently being updated
+        const preservedEvents = prev.filter(e => {
+          const masterId = e.recurringEventId || e.id;
+          const compositeKey = `${masterId}_${e.start}`; // Local event start is string
+          // Preserve if master is pending OR if this specific instance is pending
+          return pendingMasterIds.has(masterId) ||
+            pendingUpdates.current.has(e.id) ||
+            pendingInstanceDeletions.current.has(compositeKey);
+        });
+
+        return [...localEvents, ...preservedEvents, ...validGoogleEvents];
       });
     } catch (error) {
       console.error("Failed to fetch Google events", error);
@@ -110,12 +162,6 @@ function App() {
     const savedEvents = localStorage.getItem('calendar_events');
     if (savedEvents) {
       const parsed = JSON.parse(savedEvents);
-      // Only load local events from storage to avoid duplication if we re-fetch from Google
-      // Or we can store everything but filter on load.
-      // Let's assume storage is for local-only events or cache.
-      // For simplicity, let's load all but if signed in, we might overwrite Google ones.
-      // Better: Load only non-google events if we are going to fetch google events.
-      // But initially isSignedIn is false.
       setEvents(parsed);
     }
   }, []);
@@ -158,8 +204,6 @@ function App() {
 
     if (Array.isArray(actionsOrEvent)) {
       // Handle AI suggestions (Batch)
-      // For now, we process them locally. 
-      // TODO: Implement batch creation for Google Calendar if needed.
       setEvents(prevEvents => {
         let updatedEvents = [...prevEvents];
         actionsOrEvent.forEach(actionItem => {
@@ -228,17 +272,32 @@ function App() {
       if (window.confirm('정말 이 일정을 삭제하시겠습니까?')) {
         saveToHistory();
 
+        // 1. Optimistic Update: Remove from UI immediately
+        const previousEvents = [...events];
+        setEvents(prev => prev.filter(e => e.id !== eventId));
+
+        // Track pending deletion
+        pendingDeletions.current.add(eventId);
+
+        // 2. Background Sync
         if (isSignedIn && eventToDelete.isGoogleEvent) {
           try {
             await googleCalendarService.deleteEvent(eventId);
+            // Success: Remove from pending set after a delay to ensure server consistency
+            setTimeout(() => {
+              pendingDeletions.current.delete(eventId);
+            }, 5000);
           } catch (err) {
             console.error("Failed to delete from Google Calendar", err);
-            alert("Google Calendar 삭제 실패");
+            alert("Google Calendar 삭제 실패. 일정을 복구합니다.");
+            setEvents(previousEvents); // Rollback on failure
+            pendingDeletions.current.delete(eventId); // Remove from pending since we rolled back
             return;
           }
+        } else {
+          // Local event, just remove from pending immediately
+          pendingDeletions.current.delete(eventId);
         }
-
-        setEvents(prev => prev.filter(e => e.id !== eventId));
       }
     }
   };
@@ -255,73 +314,140 @@ function App() {
     const eventToDelete = events.find(e => e.id === eventId);
     saveToHistory();
 
-    if (option === 'all') {
-      if (isSignedIn && eventToDelete?.isGoogleEvent) {
-        try {
-          // If it's a recurring instance, delete the master event
-          const idToDelete = eventToDelete.recurringEventId || eventId;
-          await googleCalendarService.deleteEvent(idToDelete);
-        } catch (err) {
-          console.error("Failed to delete recurring event from Google Calendar", err);
-          alert("Google Calendar 삭제 실패");
-          return;
-        }
-      }
-    } else if (option === 'this') {
-      if (isSignedIn && eventToDelete?.isGoogleEvent) {
-        try {
-          // Deleting an instance in Google Calendar creates an exception (cancels the instance)
-          await googleCalendarService.deleteEvent(eventId);
-        } catch (err) {
-          console.error("Failed to delete event instance from Google Calendar", err);
-          alert("Google Calendar 삭제 실패");
-          return;
-        }
-      }
-    } else if (option === 'following') {
-      if (isSignedIn && eventToDelete?.isGoogleEvent) {
-        try {
-          // Use the master event ID (recurringEventId) and the instance start time
-          const masterId = eventToDelete.recurringEventId;
-          if (masterId) {
-            await googleCalendarService.deleteFollowingEvents(masterId, eventToDelete.start);
-          } else {
-            // Fallback if no recurringEventId (shouldn't happen for instances)
-            console.warn("No recurringEventId found for following delete");
-          }
-        } catch (err) {
-          console.error("Failed to delete following events from Google Calendar", err);
-          alert("Google Calendar 삭제 실패");
-          return;
-        }
-      }
-    }
+    // 1. Optimistic Update: Calculate new state immediately
+    const previousEvents = [...events];
+    const masterId = eventToDelete.recurringEventId || eventToDelete.id;
 
     setEvents(prevEvents => {
-      return prevEvents.map(event => {
-        if (event.id !== eventId) return event;
+      // If deleting all or following, we need to handle multiple events
+      if (option === 'all') {
+        // Remove all events with this master ID
+        return prevEvents.filter(e => (e.recurringEventId !== masterId && e.id !== masterId));
+      }
 
-        if (option === 'all') {
-          return null;
-        } else if (option === 'this') {
+      if (option === 'following') {
+        const deleteThreshold = new Date(eventToDelete.start);
+        return prevEvents.map(event => {
+          // Check if this event belongs to the same series
+          if (event.id === masterId || event.recurringEventId === masterId) {
+            const eventStart = new Date(event.start);
+            // If it's after or equal to the selected event, remove it (filter out later) or mark as excluded
+            // Actually, for 'following', we should just remove future instances from the list
+            // and update the master event's recurrence end.
+
+            if (eventStart >= deleteThreshold) {
+              // If it's the specific instance we clicked, or any future instance
+              return null;
+            }
+
+            // If it's the master event, we might need to update its recurrence rule locally
+            // so it doesn't generate new instances if we re-render
+            if (event.id === masterId) {
+              // Set recurrence end to yesterday
+              const yesterday = new Date(deleteThreshold);
+              yesterday.setDate(yesterday.getDate() - 1);
+              return {
+                ...event,
+                recurrenceEnd: yesterday.toISOString().split('T')[0]
+              };
+            }
+          }
+          return event;
+        }).filter(Boolean);
+      }
+
+      // Option 'this':
+      // If it's a Google event (instance), we can just remove it from the list because it's a distinct object
+      if (eventToDelete.isGoogleEvent) {
+        return prevEvents.filter(e => e.id !== eventId);
+      }
+
+      // If it's a local recurring event (single object for multiple days), we must use excludedDates
+      return prevEvents.map(event => {
+        if (event.id === eventId) {
           const dateStr = selectedDate.toISOString().split('T')[0];
           return {
             ...event,
             excludedDates: [...(event.excludedDates || []), dateStr]
           };
-        } else if (option === 'following') {
-          const yesterday = new Date(selectedDate);
-          yesterday.setDate(yesterday.getDate() - 1);
-          return {
-            ...event,
-            recurrenceEnd: yesterday.toISOString().split('T')[0]
-          };
         }
         return event;
-      }).filter(Boolean);
+      });
     });
 
     setDeleteModal({ isOpen: false, eventId: null });
+
+    // Track pending updates by MASTER ID
+    if (option === 'all') {
+      pendingDeletions.current.add(masterId);
+    } else if (option === 'following') {
+      pendingUpdates.current.add(masterId);
+    } else if (option === 'this') {
+      // For Google events, 'this' is a deletion of a specific instance ID
+      if (eventToDelete.isGoogleEvent) {
+        pendingDeletions.current.add(eventId);
+      } else {
+        // Local event update (no polling race condition usually, but for consistency)
+        pendingUpdates.current.add(eventId);
+      }
+      // For 'this', we track the specific instance using a composite key
+      // This is more reliable than ID for recurring instances
+      const compositeKey = `${masterId}_${eventToDelete.start}`;
+      pendingInstanceDeletions.current.add(compositeKey);
+    }
+
+    // 2. Background Sync
+    if (isSignedIn && eventToDelete?.isGoogleEvent) {
+      try {
+        if (option === 'all') {
+          const idToDelete = eventToDelete.recurringEventId || eventId;
+          await googleCalendarService.deleteEvent(idToDelete);
+        } else if (option === 'this') {
+          await googleCalendarService.deleteEvent(eventId);
+        } else if (option === 'following') {
+          const masterId = eventToDelete.recurringEventId;
+          if (masterId) {
+            await googleCalendarService.deleteFollowingEvents(masterId, eventToDelete.start);
+          }
+        }
+
+        // Success cleanup
+        setTimeout(() => {
+          if (option === 'all') {
+            pendingDeletions.current.delete(masterId);
+          } else if (option === 'following') {
+            pendingUpdates.current.delete(masterId);
+          } else if (option === 'this') {
+            if (eventToDelete.isGoogleEvent) {
+              pendingDeletions.current.delete(eventId);
+            } else {
+              pendingUpdates.current.delete(eventId);
+            }
+            // Clean up composite key just in case (though we aren't using it for Google anymore)
+            const compositeKey = `${masterId}_${eventToDelete.start}`;
+            pendingInstanceDeletions.current.delete(compositeKey);
+          }
+        }, 5000);
+
+      } catch (err) {
+        console.error("Failed to sync delete with Google Calendar", err);
+        alert("Google Calendar 동기화 실패. 일정을 복구합니다.");
+        setEvents(previousEvents); // Rollback
+
+        // Cleanup on failure
+        if (option === 'all') {
+          pendingDeletions.current.delete(masterId);
+        } else if (option === 'following') {
+          pendingUpdates.current.delete(masterId);
+        } else if (option === 'this') {
+          if (eventToDelete.isGoogleEvent) {
+            pendingDeletions.current.delete(eventId);
+          } else {
+            pendingUpdates.current.delete(eventId);
+          }
+        }
+      }
+    }
   };
 
   const handleDayClick = (date) => {
