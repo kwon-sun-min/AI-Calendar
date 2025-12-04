@@ -5,6 +5,8 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
+import { env } from '../config/env';
+
 const prisma = globalThis.prisma ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
