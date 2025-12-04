@@ -20,6 +20,7 @@ function CalendarPage() {
     // Google Calendar State
     const [isGoogleSignedIn, setIsGoogleSignedIn] = useState(false);
     const [currentUser, setCurrentUser] = useState(authService.getCurrentUser());
+    const [isDataLoaded, setIsDataLoaded] = useState(false);
 
     // Delete Modal State
     const [deleteModal, setDeleteModal] = useState({ isOpen: false, event: null });
@@ -153,21 +154,38 @@ function CalendarPage() {
         navigate('/');
     };
 
-    // Load events from local storage
+    // Load events from local storage (User-specific Database Simulation)
     useEffect(() => {
-        const savedEvents = localStorage.getItem('calendar_events');
-        if (savedEvents) {
-            const parsed = JSON.parse(savedEvents);
-            setEvents(parsed);
+        if (currentUser && currentUser.id) {
+            const key = `calendar_events_${currentUser.id}`;
+            const savedEvents = localStorage.getItem(key);
+            if (savedEvents) {
+                try {
+                    const parsedLocalEvents = JSON.parse(savedEvents);
+                    setEvents(prev => {
+                        // Keep existing Google events, replace local events with loaded ones from "DB"
+                        const currentGoogleEvents = prev.filter(e => e.isGoogleEvent);
+                        return [...parsedLocalEvents, ...currentGoogleEvents];
+                    });
+                } catch (e) {
+                    console.error("Failed to load events from local database", e);
+                }
+            }
+            setIsDataLoaded(true);
         }
-    }, []);
+    }, [currentUser]);
 
-    // Save events to local storage
+    // Save events to local storage (User-specific Database Simulation)
     useEffect(() => {
-        // Only save non-google events to local storage to prevent stale data
-        const localEvents = events.filter(e => !e.isGoogleEvent);
-        localStorage.setItem('calendar_events', JSON.stringify(localEvents));
-    }, [events]);
+        if (!isDataLoaded) return;
+
+        if (currentUser && currentUser.id) {
+            const key = `calendar_events_${currentUser.id}`;
+            // Only save non-google events to local storage
+            const localEvents = events.filter(e => !e.isGoogleEvent);
+            localStorage.setItem(key, JSON.stringify(localEvents));
+        }
+    }, [events, currentUser, isDataLoaded]);
 
     const saveToHistory = () => {
         setHistory(prev => [...prev, events]);
@@ -459,21 +477,23 @@ function CalendarPage() {
                     )}
                 </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    {!isGoogleSignedIn ? (
-                        <button
-                            onClick={handleGoogleLogin}
-                            className="btn-secondary"
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
-                        >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z" />
-                            </svg>
-                            Google Calendar 연동
-                        </button>
-                    ) : (
+                    {isGoogleSignedIn ? (
                         <span style={{ fontSize: '12px', color: '#34d399', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             ● Google Sync On
                         </span>
+                    ) : (
+                        currentUser?.type === 'google' && (
+                            <button
+                                onClick={handleGoogleLogin}
+                                className="btn-secondary"
+                                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px' }}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z" />
+                                </svg>
+                                Google Calendar 연동
+                            </button>
+                        )
                     )}
 
                     <button
