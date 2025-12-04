@@ -53,6 +53,7 @@ const EventList = ({ date, events, onAddEvent, onDeleteEvent, onEditEvent }) => 
                                 padding: '12px',
                                 borderRadius: 'var(--radius-md)',
                                 background: 'rgba(255,255,255,0.03)',
+                                border: '2px solid var(--border-color)',
                                 borderLeft: `4px solid ${getColor(event.colorId)}`,
                                 display: 'flex',
                                 alignItems: 'center',

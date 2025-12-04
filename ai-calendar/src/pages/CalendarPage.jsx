@@ -586,13 +586,13 @@ function CalendarPage() {
 
                     {/* AI Suggestions Panel */}
                     {aiSuggestions.length > 0 && (
-                        <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', maxHeight: '400px', overflow: 'hidden' }}>
+                        <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', maxHeight: '600px', overflow: 'hidden' }}>
                             <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--accent-primary)' }}>✨ AI 제안 일정 ({aiSuggestions.length})</h3>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <button
                                         className="btn-primary"
-                                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                                        style={{ fontSize: '12px', padding: '6px 12px' }}
                                         onClick={() => {
                                             handleApplyActions(aiSuggestions);
                                             setAiSuggestions([]);
@@ -602,7 +602,7 @@ function CalendarPage() {
                                     </button>
                                     <button
                                         className="btn-secondary"
-                                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                                        style={{ fontSize: '12px', padding: '6px 12px' }}
                                         onClick={() => setAiSuggestions([])}
                                     >
                                         지우기

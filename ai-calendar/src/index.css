@@ -1,26 +1,26 @@
 :root {
-  /* True Black Theme */
+  /* True Black Theme (Chic Real Black) */
   --bg-primary: #000000;
-  --bg-secondary: #121212;
-  --bg-glass: rgba(18, 18, 18, 0.8);
+  --bg-secondary: #0a0a0a;
+  --bg-glass: rgba(10, 10, 10, 0.8);
   --text-primary: #ffffff;
   --text-secondary: #a1a1aa;
-  --accent-primary: #6366f1;
-  /* Indigo */
-  --accent-glow: rgba(99, 102, 241, 0.5);
-  --accent-secondary: #ec4899;
-  /* Pink */
+
+  /* Mint Green Accents (Slightly Darker) */
+  --accent-primary: #80E080;
+  --accent-glow: rgba(128, 224, 128, 0.2);
+  --accent-secondary: #66B366;
+
   --border-color: #27272a;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 20px;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px 0 rgba(255, 255, 255, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(255, 255, 255, 0.1), 0 4px 6px -2px rgba(255, 255, 255, 0.05);
   --font-family: 'Inter', system-ui, -apple-system, sans-serif;
 
   /* Tag Colors */
   --tag-default: #616161;
-  /* Graphite */
   --tag-red: #d50000;
   --tag-orange: #f4511e;
   --tag-yellow: #f6bf26;
@@ -28,19 +28,40 @@
   --tag-blue: #039be5;
   --tag-indigo: #3f51b5;
   --tag-violet: #8e24aa;
+  /* Text color on accent background */
+  --text-on-accent: #000000;
+
+  /* AI Bubble Colors */
+  --bg-ai-bubble: rgba(255, 255, 255, 0.1);
+  --text-ai-bubble: #ffffff;
 }
 
-/* Light Theme (White) */
+/* Light Theme (Daisy & Olive) */
 [data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-glass: rgba(255, 255, 255, 0.9);
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
-  --accent-primary: #4f46e5;
-  --accent-glow: rgba(79, 70, 229, 0.2);
-  --accent-secondary: #db2777;
-  --border-color: #e2e8f0;
+  --bg-primary: #FEFDF5;
+  /* Warm Cream / Daisy White */
+  --bg-secondary: #F4F1EA;
+  /* Soft Beige/Gray */
+  --bg-glass: rgba(254, 253, 245, 0.9);
+  --text-primary: #2D3748;
+  /* Softer Dark Gray for better contrast on cream */
+  --text-secondary: #718096;
+
+  /* Olive Accents */
+  --accent-primary: #556B2F;
+  /* Olive Green */
+  --accent-glow: rgba(85, 107, 47, 0.2);
+  --accent-secondary: #6B8E23;
+  /* Olive Drab */
+
+  --text-on-accent: #FFFFFF;
+
+  /* AI Bubble Colors (Darker Daisy) */
+  --bg-ai-bubble: #EBE9DE;
+  --text-ai-bubble: var(--text-primary);
+
+  --border-color: #E4E4E7;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
 }
 
@@ -68,23 +89,28 @@ button {
 }
 
 /* Premium Utilities */
+/* Premium Utilities */
 .glass-panel {
   background: var(--bg-glass);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
+  border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: white;
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
   padding: 12px 20px;
   border-radius: var(--radius-md);
   font-weight: 600;
   transition: transform 0.2s, box-shadow 0.2s;
   box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+[data-theme="light"] .btn-primary {
+  color: var(--text-on-accent);
 }
 
 .btn-primary:active {
@@ -93,7 +119,7 @@ button {
 
 .btn-secondary {
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: 2px solid var(--border-color);
   color: var(--text-primary);
   padding: 10px 16px;
   border-radius: var(--radius-md);
@@ -136,7 +162,7 @@ button {
 
 .calendar-day.active {
   background: var(--bg-secondary);
-  border: 1px solid var(--accent-primary);
+  border: 2px solid var(--accent-primary);
 }
 
 .calendar-day.today {
