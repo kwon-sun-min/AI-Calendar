@@ -112,7 +112,7 @@ const EventList = ({ date, events, onAddEvent, onDeleteEvent, onEditEvent }) => 
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation(); // Prevent opening edit modal
-                                        onDeleteEvent && onDeleteEvent(event.id);
+                                        onDeleteEvent && onDeleteEvent(event);
                                     }}
                                     style={{
                                         background: 'none',
