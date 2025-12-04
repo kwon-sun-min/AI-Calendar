@@ -180,6 +180,8 @@ const AIChat = ({ events, onAddEvent, onUndo, canUndo, onShowSuggestions }) => {
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
+                                // Prevent submission during IME composition (Korean input)
+                                if (e.nativeEvent.isComposing) return;
                                 e.preventDefault();
                                 handleSend(e);
                             }

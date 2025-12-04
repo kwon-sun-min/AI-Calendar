@@ -588,14 +588,26 @@ function CalendarPage() {
                     {aiSuggestions.length > 0 && (
                         <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', maxHeight: '400px', overflow: 'hidden' }}>
                             <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--accent-primary)' }}>✨ AI 제안 일정</h3>
-                                <button
-                                    className="btn-secondary"
-                                    style={{ fontSize: '11px', padding: '4px 8px' }}
-                                    onClick={() => setAiSuggestions([])}
-                                >
-                                    지우기
-                                </button>
+                                <h3 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--accent-primary)' }}>✨ AI 제안 일정 ({aiSuggestions.length})</h3>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button
+                                        className="btn-primary"
+                                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                                        onClick={() => {
+                                            handleApplyActions(aiSuggestions);
+                                            setAiSuggestions([]);
+                                        }}
+                                    >
+                                        모두 수락
+                                    </button>
+                                    <button
+                                        className="btn-secondary"
+                                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                                        onClick={() => setAiSuggestions([])}
+                                    >
+                                        지우기
+                                    </button>
+                                </div>
                             </div>
 
                             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -658,7 +670,15 @@ function CalendarPage() {
                                                         {(() => {
                                                             if (evt.recurrence === 'custom' && evt.recurrenceDays) {
                                                                 const days = ['일', '월', '화', '수', '목', '금', '토'];
-                                                                return evt.recurrenceDays.sort((a, b) => a - b).map(d => days[d]).join(', ');
+                                                                const sortedDays = evt.recurrenceDays.sort((a, b) => a - b);
+                                                                const dayStr = sortedDays.map(d => days[d]).join('');
+
+                                                                // Check for common patterns
+                                                                if (dayStr === '월화수목금') return '평일 (월-금)';
+                                                                if (dayStr === '일토') return '주말 (토-일)'; // Note: 0 is Sun, 6 is Sat. Sort order 0,6 -> 일,토
+                                                                if (dayStr === '일월화수목금토') return '매일';
+
+                                                                return sortedDays.map(d => days[d]).join(', ');
                                                             }
                                                             const map = {
                                                                 'daily': '매일',

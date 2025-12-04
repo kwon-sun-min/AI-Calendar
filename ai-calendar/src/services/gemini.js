@@ -52,11 +52,12 @@ ${eventContext || "No events scheduled."}
 
 YOUR PROCESS:
 1. **Analyze**: Understand the user's intent.
-2. **Smart Scheduling**:
+2. **Smart Scheduling & Conflict Resolution**:
+   - **CRITICAL**: Check "Current Schedule" above. DO NOT suggest times that overlap with existing events.
+   - If a requested time is busy, find the *nearest available slot* and explain why (e.g., "오후 2시는 회의가 있어서 3시로 잡아드렸어요.").
    - If the user doesn't specify a time, find a **FREE SLOT** in the "Current Schedule".
    - **Business Hours**: Prefer Mon-Fri, 09:00 - 18:00 for meetings/work.
    - **Personal Time**: Prefer evenings/weekends for gym, movies, etc.
-   - **Conflict Check**: ABSOLUTELY DO NOT suggest times that overlap with existing events.
 3. **Goal-Oriented Scheduling**:
    - When the user mentions a **goal** (e.g., "pass TOEIC", "get fit", "learn programming"), break it down into **concrete, achievable tasks**.
    - **Be realistic**: Don't overload the schedule. Suggest 1-2 hours per day max for intensive study.
@@ -96,8 +97,10 @@ EXAMPLES:
 
 Rules:
 1. Converse naturally in Korean. Explain *why* you chose a specific time if you inferred it (e.g., "화요일 오후 2시가 비어있어서 추천해드려요.").
-2. **CRITICAL**: Always provide a JSON block at the very end.
-3. The JSON block must follow this schema:
+2. **CRITICAL**: The text response MUST match the JSON data. If you say 2 PM in text, the JSON must be 14:00.
+3. **CRITICAL**: Always provide a JSON block at the very end.
+4. The JSON block must be wrapped in triple backticks (\`\`\`json ... \`\`\`).
+5. The JSON block must follow this schema:
 \`\`\`json
 [
   {
@@ -111,10 +114,21 @@ Rules:
     "excludedDays": [0, 1, ...],
     "excludedDate": "YYYY-MM-DD",
     "description": "Reason for change or detail",
-    "originalTitle": "Exact title of event to delete/update"
+    "originalTitle": "Exact title of event to delete/update",
+    "colorId": "1" | "2" | ... | "11" // Optional. Google Calendar Color ID.
   }
 ]
 \`\`\`
+
+**Color Mapping (Google Calendar IDs):**
+- "Blue" (Default/Blueberry) -> "9"
+- "Green" (Sage/Basil) -> "2" or "10"
+- "Purple" (Grape) -> "3"
+- "Red" (Tomato) -> "11"
+- "Yellow" (Banana) -> "5"
+- "Orange" (Tangerine) -> "6"
+- "Gray" (Graphite) -> "8"
+- "Pink" (Flamingo) -> "4"
 
 **Recurrence Rules:**
 - "Every day" -> recurrence: "daily"
@@ -123,6 +137,18 @@ Rules:
 - "Every Monday" -> recurrence: "weekly"
 - "Mon, Wed, Fri" -> recurrence: "custom", recurrenceDays: [1, 3, 5]
 - "Tue, Thu" -> recurrence: "custom", recurrenceDays: [2, 4]
+
+**Intelligent Recurrence Recommendation:**
+- If the user asks for "3 times a week" without specifying days, YOU MUST suggest specific days (e.g., Mon, Wed, Fri) and use \`recurrence: "custom"\` with \`recurrenceDays\`.
+- Do NOT create multiple separate weekly events for a pattern like Mon/Wed/Fri. Use ONE event with \`recurrence: "custom"\`.
+
+**Color Logic:**
+- If the user asks to "mark [Topic] events in [Color]", add \`"colorId": "[ID]"\` to all created/updated events matching that topic.
+- Example: "Mark TOEIC events in yellow" -> Use \`"colorId": "5"\` for TOEIC events.
+
+**Description Logic:**
+- When UPDATING an event (e.g., changing color or time), DO NOT add or change the \`description\` unless the user explicitly asks to add details.
+- Keep the description field empty or null if it's just a color/time change.
 `;
 
     const validHistory = history
@@ -140,7 +166,7 @@ Rules:
             const chat = model.startChat({
                 history: validHistory,
                 generationConfig: {
-                    maxOutputTokens: 1000,
+                    maxOutputTokens: 4000,
                 },
             });
 
@@ -152,14 +178,47 @@ Rules:
             let cleanText = text;
             let suggestedEvents = null;
 
-            const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch) {
-                try {
-                    suggestedEvents = JSON.parse(jsonMatch[1]);
-                    console.log("🤖 AI Raw JSON:", suggestedEvents); // Debug log
-                    cleanText = text.replace(jsonMatch[0], '').trim();
-                } catch (e) {
-                    console.error("Failed to parse Gemini JSON", e);
+            // Regex to find the start of the JSON block
+            const jsonStartRegex = /```(?:json)?\s*\[/;
+            const jsonStartMatch = text.match(jsonStartRegex);
+
+            if (jsonStartMatch) {
+                // Cut off the text at the start of the JSON block
+                cleanText = text.substring(0, jsonStartMatch.index).trim();
+
+                // Try to extract the full JSON block
+                const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                if (jsonMatch) {
+                    try {
+                        suggestedEvents = JSON.parse(jsonMatch[1]);
+                        console.log("🤖 AI Raw JSON:", suggestedEvents);
+                    } catch (e) {
+                        console.error("Failed to parse Gemini JSON", e);
+                    }
+                } else {
+                    // Fallback: Try to parse from the start match to the end or try to repair
+                    // If no closing backticks, it might be truncated. 
+                    // We try to find the array part.
+                    const arrayStartIndex = text.indexOf('[', jsonStartMatch.index);
+                    if (arrayStartIndex !== -1) {
+                        const potentialJson = text.substring(arrayStartIndex).replace(/```$/, '');
+                        try {
+                            suggestedEvents = JSON.parse(potentialJson);
+                        } catch (e) {
+                            console.error("Failed to parse truncated/malformed JSON", e);
+                        }
+                    }
+                }
+            } else {
+                // Fallback for no backticks but array presence
+                const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]$/);
+                if (arrayMatch) {
+                    cleanText = text.replace(arrayMatch[0], '').trim();
+                    try {
+                        suggestedEvents = JSON.parse(arrayMatch[0]);
+                    } catch (e) {
+                        console.error("Failed to parse fallback JSON", e);
+                    }
                 }
             }
 

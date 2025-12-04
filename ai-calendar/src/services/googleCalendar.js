@@ -16,7 +16,14 @@ const mapRecurrenceToRrule = (eventData) => {
             rules.push('RRULE:FREQ=DAILY');
             break;
         case 'weekly':
-            rules.push('RRULE:FREQ=WEEKLY');
+            // If it's a simple "weekly" but has recurrenceDays, treat it as custom to enforce specific days
+            if (eventData.recurrenceDays && eventData.recurrenceDays.length > 0) {
+                const days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+                const byDay = eventData.recurrenceDays.map(d => days[d]).join(',');
+                rules.push(`RRULE:FREQ=WEEKLY;BYDAY=${byDay}`);
+            } else {
+                rules.push('RRULE:FREQ=WEEKLY');
+            }
             break;
         case 'monthly':
             rules.push('RRULE:FREQ=MONTHLY');
@@ -35,6 +42,18 @@ const mapRecurrenceToRrule = (eventData) => {
             }
             break;
     }
+
+    if (eventData.recurrenceEnd) {
+        // Format YYYY-MM-DD to YYYYMMDDT235959Z
+        const endDate = new Date(eventData.recurrenceEnd);
+        endDate.setHours(23, 59, 59);
+        const untilStr = endDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+        if (rules.length > 0) {
+            rules[0] += `;UNTIL=${untilStr}`;
+        }
+    }
+
     return rules.length > 0 ? rules : undefined;
 };
 
