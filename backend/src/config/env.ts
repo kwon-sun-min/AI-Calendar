@@ -6,8 +6,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z
     .string()
-    .min(1, 'DATABASE_URL is required')
-    .default('postgresql://postgres:postgres@localhost:5432/calendar'),
+    .min(1, 'DATABASE_URL is required'),
 });
 
 const parsed = envSchema.safeParse(process.env);
