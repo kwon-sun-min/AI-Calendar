@@ -57,3 +57,20 @@ export const updateSessionTitle = async (sessionId: string, title: string) => {
         data: { title },
     });
 };
+
+export const getRecentContext = async (userId: string, limit: number = 20) => {
+    return prisma.chatMessage.findMany({
+        where: {
+            session: {
+                userId: userId
+            }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        include: {
+            session: {
+                select: { title: true }
+            }
+        }
+    });
+};

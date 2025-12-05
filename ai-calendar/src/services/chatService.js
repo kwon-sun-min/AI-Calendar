@@ -70,5 +70,16 @@ export const chatService = {
         } catch (error) {
             console.error("Failed to update session title:", error);
         }
+    },
+
+    getRecentContext: async (userId) => {
+        try {
+            const response = await fetch(`${API_URL}/context/${userId}`);
+            if (!response.ok) throw new Error('Failed to fetch context');
+            return await response.json();
+        } catch (error) {
+            console.error("Failed to fetch recent context:", error);
+            return { context: [] };
+        }
     }
 };

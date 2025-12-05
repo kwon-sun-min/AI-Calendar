@@ -142,9 +142,24 @@ const AIChat = ({ events, onAddEvent, onUndo, canUndo, onShowSuggestions }) => {
             }
         }
 
+        // Filter out internal system messages or keep them simple
         const history = messages.filter(m => m.id !== 1 && m.id !== 'welcome').slice(-10);
 
-        const response = await generateGeminiResponse(apiKey, history, userMsg.text, events);
+        // Fetch global context (recent messages from all sessions)
+        let globalContext = [];
+        if (user) {
+            const contextData = await chatService.getRecentContext(user.id);
+            if (contextData.context) {
+                globalContext = contextData.context.map(msg => ({
+                    role: msg.role,
+                    text: msg.text,
+                    sessionTitle: msg.session?.title || 'Unknown Session',
+                    createdAt: msg.createdAt
+                }));
+            }
+        }
+
+        const response = await generateGeminiResponse(apiKey, history, userMsg.text, events, globalContext);
 
         setIsTyping(false);
 

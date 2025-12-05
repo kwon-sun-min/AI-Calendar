@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export const generateGeminiResponse = async (apiKey, history, userMessage, currentEvents) => {
+export const generateGeminiResponse = async (apiKey, history, userMessage, currentEvents, globalContext = []) => {
     console.log("🚀 Gemini API Request Started");
     console.log("🔑 Using API Key:", apiKey ? (apiKey.substring(0, 10) + "..." + apiKey.substring(apiKey.length - 5)) : "None");
 
@@ -31,7 +31,6 @@ export const generateGeminiResponse = async (apiKey, history, userMessage, curre
     const dayName = today.toLocaleDateString('ko-KR', { weekday: 'long' });
 
     // Simplify events to save tokens
-    // Simplify events to save tokens, sorted by time
     const eventContext = [...currentEvents]
         .sort((a, b) => new Date(a.start) - new Date(b.start))
         .map(e => {
@@ -42,6 +41,11 @@ export const generateGeminiResponse = async (apiKey, history, userMessage, curre
         })
         .join('\n');
 
+    // Format global context
+    const globalContextStr = globalContext.length > 0
+        ? globalContext.map(msg => `[${msg.sessionTitle}] ${msg.role}: ${msg.text}`).join('\n')
+        : "No recent cross-session context.";
+
     const systemPrompt = `
 You are an intelligent Calendar Assistant. Your goal is to help the user manage their schedule naturally and accurately.
 Today is ${todayStr} (${dayName}).
@@ -50,8 +54,11 @@ Today is ${todayStr} (${dayName}).
 Current Schedule:
 ${eventContext || "No events scheduled."}
 
+Recent User Interactions (Cross-Session Context):
+${globalContextStr}
+
 YOUR PROCESS:
-1. **Analyze**: Understand the user's intent.
+1. **Analyze**: Understand the user's intent. Use the "Recent User Interactions" to understand broader context or recurring themes if the user asks for recommendations based on past conversations.
 2. **Smart Scheduling & Conflict Resolution**:
    - **CRITICAL**: Check "Current Schedule" above. DO NOT suggest times that overlap with existing events.
    - If a requested time is busy, find the *nearest available slot* and explain why (e.g., "오후 2시는 [기존 일정]이 있어서 3시로 잡아드렸어요.").
