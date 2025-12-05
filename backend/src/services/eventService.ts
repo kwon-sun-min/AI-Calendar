@@ -19,6 +19,16 @@ const baseSelect = {
   updatedAt: true,
 } satisfies Prisma.EventSelect;
 
+const safeJsonParse = (jsonString: string | null) => {
+  if (!jsonString) return [];
+  try {
+    return JSON.parse(jsonString);
+  } catch (e) {
+    console.error('Failed to parse tags JSON:', e);
+    return [];
+  }
+};
+
 export const listEvents = async (filters: EventQueryInput) => {
   const where: Prisma.EventWhereInput = {};
 
@@ -42,7 +52,7 @@ export const listEvents = async (filters: EventQueryInput) => {
 
   return events.map(event => ({
     ...event,
-    tags: JSON.parse(event.tags as string),
+    tags: safeJsonParse(event.tags as unknown as string),
   }));
 };
 
@@ -58,7 +68,7 @@ export const getEventById = async (id: string) => {
 
   return {
     ...event,
-    tags: JSON.parse(event.tags as string),
+    tags: safeJsonParse(event.tags as unknown as string),
   };
 };
 
@@ -72,7 +82,7 @@ export const createEvent = async (payload: CreateEventInput) => {
     isAllDay: payload.isAllDay ?? false,
     recurrenceRule: payload.recurrenceRule ?? null,
     intent: payload.intent ?? null,
-    tags: JSON.stringify(payload.tags ?? []),
+    tags: JSON.stringify(payload.tags ?? []) as any,
   };
 
   const event = await prisma.event.create({
@@ -82,7 +92,7 @@ export const createEvent = async (payload: CreateEventInput) => {
 
   return {
     ...event,
-    tags: JSON.parse(event.tags as string),
+    tags: safeJsonParse(event.tags as unknown as string),
   };
 };
 
@@ -99,7 +109,7 @@ export const updateEvent = async (id: string, payload: UpdateEventInput) => {
   if (payload.isAllDay !== undefined) data.isAllDay = payload.isAllDay;
   if (payload.recurrenceRule !== undefined) data.recurrenceRule = payload.recurrenceRule;
   if (payload.intent !== undefined) data.intent = payload.intent;
-  if (payload.tags !== undefined) data.tags = JSON.stringify(payload.tags);
+  if (payload.tags !== undefined) data.tags = JSON.stringify(payload.tags) as any;
 
   const event = await prisma.event.update({
     where: { id },
@@ -109,7 +119,7 @@ export const updateEvent = async (id: string, payload: UpdateEventInput) => {
 
   return {
     ...event,
-    tags: JSON.parse(event.tags as string),
+    tags: safeJsonParse(event.tags as unknown as string),
   };
 };
 

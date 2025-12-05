@@ -83,4 +83,17 @@ router.put(
     }),
 );
 
+router.get(
+    '/context/:userId',
+    asyncHandler(async (req, res) => {
+        const { userId } = req.params;
+        if (!userId) {
+            res.status(400).json({ error: 'User ID is required' });
+            return;
+        }
+        const context = await chatService.getRecentContext(userId);
+        res.json({ context });
+    }),
+);
+
 export default router;
