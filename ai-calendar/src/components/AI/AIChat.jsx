@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateGeminiResponse } from '../../services/gemini';
+import { chatService } from '../../services/chatService';
+import { authService } from '../../services/authService';
 
 const AIChat = ({ events, onAddEvent, onUndo, canUndo, onShowSuggestions }) => {
     const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
@@ -11,6 +13,7 @@ const AIChat = ({ events, onAddEvent, onUndo, canUndo, onShowSuggestions }) => {
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const messagesEndRef = useRef(null);
+    const user = authService.getCurrentUser();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -19,6 +22,25 @@ const AIChat = ({ events, onAddEvent, onUndo, canUndo, onShowSuggestions }) => {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // Load chat history on mount
+    useEffect(() => {
+        if (user) {
+            chatService.getHistory(user.id).then(data => {
+                if (data.history && data.history.length > 0) {
+                    const formattedMessages = data.history.map(msg => ({
+                        id: msg.id,
+                        sender: msg.role,
+                        text: msg.text
+                    }));
+                    setMessages([
+                        { id: 'welcome', sender: 'ai', text: '안녕하세요! Gemini AI 캘린더 어시스턴트입니다. 무엇을 도와드릴까요?' },
+                        ...formattedMessages
+                    ]);
+                }
+            });
+        }
+    }, []);
 
     const handleSaveKey = (key) => {
         const trimmedKey = key.trim();
@@ -48,8 +70,13 @@ const AIChat = ({ events, onAddEvent, onUndo, canUndo, onShowSuggestions }) => {
         setInput('');
         setIsTyping(true);
 
+        // Save user message
+        if (user) {
+            chatService.saveMessage(user.id, 'user', userMsg.text);
+        }
+
         // Filter out internal system messages or keep them simple
-        const history = messages.filter(m => m.id !== 1).slice(-10); // Keep last 10 context
+        const history = messages.filter(m => m.id !== 1 && m.id !== 'welcome').slice(-10); // Keep last 10 context
 
         const response = await generateGeminiResponse(apiKey, history, userMsg.text, events);
 
@@ -60,12 +87,19 @@ const AIChat = ({ events, onAddEvent, onUndo, canUndo, onShowSuggestions }) => {
             onShowSuggestions(response.events);
         }
 
-        setMessages(prev => [...prev, {
+        const aiMsg = {
             id: Date.now() + 1,
             sender: 'ai',
             text: response.text,
             isError: response.error
-        }]);
+        };
+
+        setMessages(prev => [...prev, aiMsg]);
+
+        // Save AI response
+        if (user && !response.error) {
+            chatService.saveMessage(user.id, 'ai', aiMsg.text);
+        }
     };
 
     if (showKeyInput) {

@@ -34,11 +34,16 @@ export const listEvents = async (filters: EventQueryInput) => {
     where.intent = filters.intent;
   }
 
-  return prisma.event.findMany({
+  const events = await prisma.event.findMany({
     where,
     orderBy: { start: 'asc' },
     select: baseSelect,
   });
+
+  return events.map(event => ({
+    ...event,
+    tags: JSON.parse(event.tags as string),
+  }));
 };
 
 export const getEventById = async (id: string) => {
@@ -51,7 +56,10 @@ export const getEventById = async (id: string) => {
     throw new HttpError(404, 'Event not found');
   }
 
-  return event;
+  return {
+    ...event,
+    tags: JSON.parse(event.tags as string),
+  };
 };
 
 export const createEvent = async (payload: CreateEventInput) => {
@@ -64,13 +72,18 @@ export const createEvent = async (payload: CreateEventInput) => {
     isAllDay: payload.isAllDay ?? false,
     recurrenceRule: payload.recurrenceRule ?? null,
     intent: payload.intent ?? null,
-    tags: payload.tags ?? [],
+    tags: JSON.stringify(payload.tags ?? []),
   };
 
-  return prisma.event.create({
+  const event = await prisma.event.create({
     data,
     select: baseSelect,
   });
+
+  return {
+    ...event,
+    tags: JSON.parse(event.tags as string),
+  };
 };
 
 export const updateEvent = async (id: string, payload: UpdateEventInput) => {
@@ -86,16 +99,22 @@ export const updateEvent = async (id: string, payload: UpdateEventInput) => {
   if (payload.isAllDay !== undefined) data.isAllDay = payload.isAllDay;
   if (payload.recurrenceRule !== undefined) data.recurrenceRule = payload.recurrenceRule;
   if (payload.intent !== undefined) data.intent = payload.intent;
-  if (payload.tags !== undefined) data.tags = payload.tags;
+  if (payload.tags !== undefined) data.tags = JSON.stringify(payload.tags);
 
-  return prisma.event.update({
+  const event = await prisma.event.update({
     where: { id },
     data,
     select: baseSelect,
   });
+
+  return {
+    ...event,
+    tags: JSON.parse(event.tags as string),
+  };
 };
 
 export const deleteEvent = async (id: string) => {
+  // Check existence first
   await getEventById(id);
   await prisma.event.delete({ where: { id } });
 };

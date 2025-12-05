@@ -9,15 +9,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-}
-
-enum Intent {
-  WORK
-  WELLNESS
-  PERSONAL
-  OTHER
 }
 
 model Event {
@@ -26,11 +19,11 @@ model Event {
   description    String?
   start          DateTime
   end            DateTime
-  timezone       String?  @db.VarChar(64)
+  timezone       String?
   isAllDay       Boolean  @default(false)
   recurrenceRule String?
-  intent         Intent?
-  tags           String[] @default([]) @db.Text
+  intent         String?
+  tags           String   @default("[]")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -42,19 +35,6 @@ model Event {
   user   User?   @relation(fields: [userId], references: [id])
 }
 
-enum SubscriptionTier {
-  FREE
-  PRO
-}
-
-enum SubscriptionStatus {
-  ACTIVE
-  CANCELED
-  PAST_DUE
-  PAUSED
-  UNPAID
-}
-
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -64,8 +44,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Subscription Fields
-  subscriptionTier   SubscriptionTier   @default(FREE)
-  subscriptionStatus SubscriptionStatus?
+  subscriptionTier   String   @default("FREE")
+  subscriptionStatus String?
   lemonSqueezyCustomerId String?
   lemonSqueezySubscriptionId String?
 
@@ -74,4 +54,14 @@ model User {
   aiUsageLimit Int @default(5) // -1 for unlimited
 
   events Event[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String
+  text      String
+  createdAt DateTime @default(now())
+  userId    String
+  
+  @@index([userId])
 }

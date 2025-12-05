@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import eventsRouter from './routes/events';
+import chatRouter from './routes/chat';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -17,6 +18,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/events', eventsRouter);
+app.use('/chat', chatRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
